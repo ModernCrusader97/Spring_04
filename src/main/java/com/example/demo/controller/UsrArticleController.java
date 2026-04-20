@@ -4,77 +4,156 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.example.demo.service.ArticleService;
+import com.example.demo.util.Ut;
 import com.example.demo.vo.Article;
+import com.example.demo.vo.ResultData;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
+import jakarta.servlet.http.HttpSession;
 
 @Controller
 public class UsrArticleController {
 
-
 	@Autowired
 	private ArticleService articleService;
 
-	public UsrArticleController() {
-
-	}
-
+	// 액션메서드
 	@RequestMapping("/usr/article/getArticle")
 	@ResponseBody
-	public Object getArticle(int id) {
+	public ResultData<Article> getArticle(int id) {
+
 		Article article = articleService.getArticleById(id);
 
 		if (article == null) {
-			return id + "번은 존재하지 않는 게시물입니다.";
+			return ResultData.from("F-1", Ut.f("%d번 게시글은 없어", id));
 		}
 
-		return article;
+		return ResultData.from("S-1", Ut.f("%d번 게시글입니다.", id), "article 1개", article);
 	}
+	
+	@RequestMapping("/usr/article/detail")
+	public String showDetail(Model model, int id) {
+	    Article article = articleService.getArticleById(id);
 
-	@RequestMapping("/usr/article/doAdd")
+	    if (article == null) {
+
+	        return Ut.f("%d번 게시글은 존재하지 않습니다.", id); 
+	    }
+	    
+	    model.addAttribute("article", article);
+	    
+	    return "usr/article/detail";
+	}
+	
+	@RequestMapping("/usr/article/doModify")
 	@ResponseBody
-	public Article doAdd(String title, String body) {
+	public ResultData<Article> doModify(HttpSession session, int id, String title, String body) {
+
+		boolean isLogined = false;
+		int loginedMemberId = 0;
+
+		if (session.getAttribute("loginedMemberId") != null) {
+			isLogined = true;
+			loginedMemberId = (int) session.getAttribute("loginedMemberId");
+		}
+
+		if (isLogined == false) {
+			return ResultData.from("F-A", "로그인 후 수정");
+		}
+
+		Article article = articleService.getArticleById(id);
+
+		if (article == null) {
+			return ResultData.from("F-1", Ut.f("%d번 게시글은 없음", id));
+		}
+
 		
+		ResultData loginedMemberCanModifyRd = articleService.loginedMemberCanModify(loginedMemberId, article);
+		
+		if (loginedMemberCanModifyRd.isFail()) {
+			return ResultData.from(loginedMemberCanModifyRd.getResultCode(), loginedMemberCanModifyRd.getMsg(), "이번에 수정된 글", article);
+		}
+		
+		
+		articleService.modifyArticle(id, title, body);
+		article = articleService.getArticleById(id);
 
-		return articleService.writeArticle(title, body);
-
-	}
-
-	@RequestMapping("/usr/article/getArticles")
-	@ResponseBody
-	public List<Article> getArticles() {
-		return articleService.getArticles();
+		return ResultData.from(loginedMemberCanModifyRd.getResultCode(), loginedMemberCanModifyRd.getMsg());
 	}
 
 	@RequestMapping("/usr/article/doDelete")
 	@ResponseBody
-	public String doDelete(int id) {
-		Article article = articleService.getArticleById(id);
+	public ResultData<Integer> doDelete(HttpSession session, int id) {
 
-		if (article == null) {
-			return id + "번은 존재하지 않는 게시물입니다.";
+		boolean isLogined = false;
+		int loginedMemberId = 0;
+
+		if (session.getAttribute("loginedMemberId") != null) {
+			isLogined = true;
+			loginedMemberId = (int) session.getAttribute("loginedMemberId");
 		}
 
-		articleService.deleteArticle(id);
+		if (isLogined == false) {
+			return ResultData.from("F-A", "로그인 후 삭제");
+		}
 
-		return id + "번 글이 삭제되었습니다";
-	}
-
-	@RequestMapping("/usr/article/doModify")
-	@ResponseBody
-	public Object doModify(int id, String title, String body) {
 		Article article = articleService.getArticleById(id);
 
 		if (article == null) {
-			return id + "번은 존재하지 않는 게시물입니다.";
+			return ResultData.from("F-1", Ut.f("%d번 게시글은 없음", id));
+		}
+
+		if (article.getMemberId() != loginedMemberId) {
+			return ResultData.from("F-A2", "권한없음");
 		}
 		
-		articleService.modifyArticle(id,title,body);
-		return article;
+		articleService.deleteArticle(id);
+
+		return ResultData.from("S-1", Ut.f("%d번 게시글은 삭제", id),"이번에 삭제된 게시글의 id", id);
 	}
+
+	@RequestMapping("/usr/article/list")
+	public String showList(Model model) {
+		List<Article> articles = articleService.getArticles();
+
+		model.addAttribute("articles", articles);
+		return "usr/article/list";
+	}
+
+	@RequestMapping("/usr/article/doWrite")
+	@ResponseBody
+	public ResultData<Article> doWrite(HttpSession session, String title, String body) {
+		
+		boolean isLogined = false;
+		int loginedMemberId = 0;
+
+		if (session.getAttribute("loginedMemberId") != null) {
+			isLogined = true;
+			loginedMemberId = (int) session.getAttribute("loginedMemberId");
+		}
+
+		if (isLogined == false) {
+			return ResultData.from("F-A", "로그인 후 글작성");
+		}
+		
+		if (Ut.isEmptyOrNull(title)) {
+			return ResultData.from("F-1", "제목써");
+		}
+		if (Ut.isEmptyOrNull(body)) {
+			return ResultData.from("F-2", "내용써");
+		}
+
+		ResultData doWriteRd = articleService.writeArticle(loginedMemberId, title, body);
+
+		int id = (int) doWriteRd.getData1();
+
+		Article article = articleService.getArticleById(id);
+
+		return ResultData.newData(doWriteRd, "이번에 작성된 글 / 새로 추가된 article",article);
+	}
+
 }
