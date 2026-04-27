@@ -4,7 +4,6 @@
 <%@ include file="../common/head.jspf"%>
 <hr />
 <div>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Culpa exercitationem unde eum deserunt fugiat
-	cupiditate reprehenderit voluptatem a repellat molestiae odio officia possimus excepturi facilis nulla obcaecati dolore
-	reiciendis aperiam.</div>
+	cupiditate reprehenderit</div>
 <div>안녕하세요</div>
 <%@ include file="../common/foot.jspf"%>
